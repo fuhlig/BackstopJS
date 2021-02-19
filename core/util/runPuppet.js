@@ -1,7 +1,5 @@
-const MERGE_IMG_SEGMENT_HEIGHT = 2000;
 const puppeteer = require('puppeteer');
 
-const mergeImg = require('merge-img');
 const fs = require('./fs');
 const path = require('path');
 const chalk = require('chalk');
@@ -301,14 +299,14 @@ async function delegateSelectors (
   });
 
   if (captureDocument) {
-    captureJobs.push(function () { return captureScreenshot(page, browser, captureDocument, selectorMap, config, []); });
+    captureJobs.push(function () { return captureScreenshot(page, browser, captureDocument, selectorMap, config, [], viewport); });
   }
   // TODO: push captureViewport into captureList (instead of calling captureScreenshot()) to improve perf.
   if (captureViewport) {
-    captureJobs.push(function () { return captureScreenshot(page, browser, captureViewport, selectorMap, config, []); });
+    captureJobs.push(function () { return captureScreenshot(page, browser, captureViewport, selectorMap, config, [], viewport); });
   }
   if (captureList.length) {
-    captureJobs.push(function () { return captureScreenshot(page, browser, null, selectorMap, config, captureList); });
+    captureJobs.push(function () { return captureScreenshot(page, browser, null, selectorMap, config, captureList, viewport); });
   }
 
   return new Promise(function (resolve, reject) {
@@ -341,78 +339,21 @@ async function delegateSelectors (
   }).then(_ => compareConfig);
 }
 
-async function captureScreenshot (page, browser, selector, selectorMap, config, selectors) {
+async function captureScreenshot (page, browser, selector, selectorMap, config, selectors, viewport) {
   let filePath;
   let fullPage = (selector === NOCLIP_SELECTOR || selector === DOCUMENT_SELECTOR);
   if (selector) {
     filePath = selectorMap[selector].filePath;
     ensureDirectoryPath(filePath);
 
-    /*
-      Setting config.mergeImgHack == true will use an alternate screen grab method which
-      takes multple screenshots at periodic scroll positions then stitches them all togther
-      into one single screenshot.
-     */
-    if (fullPage && config.mergeImgHack) {
-      // Safer version of `document` selector
-      // see https://github.com/garris/BackstopJS/issues/820
-      try {
-        const screenHeight = typeof config.mergeImgHack === 'number' ? config.mergeImgHack : MERGE_IMG_SEGMENT_HEIGHT;
-
-        const bodyHandle = await page.$('body');
-        const { width, height: totalHeight } = await bodyHandle.boundingBox();
-
-        const screens = [];
-        let cumHeight = 0;
-        for (let i = 0; i * screenHeight < totalHeight; i++) {
-          cumHeight += screenHeight;
-          console.log(`screenshot part ${i} (${Math.min(cumHeight, totalHeight)} / ${totalHeight})`);
-          const screen = await page.screenshot({
-            path: totalHeight > screenHeight ? undefined : filePath, // if only 1 screen is needed with save immediately
-            fullPage: false,
-            clip: {
-              x: 0,
-              y: i * screenHeight,
-              width,
-              height:
-                cumHeight > totalHeight
-                  ? Math.ceil(screenHeight - (cumHeight - totalHeight))
-                  : screenHeight
-            }
-          });
-          screens.push(screen);
-        }
-
-        // if there was only 1 screen we already saved the file during screenshot
-        if (screens.length > 1) {
-          const img = await mergeImg(screens, {
-            direction: true
-          });
-
-          // Note: mergeImg relies on an old version of Jimp without writeAsync support
-          // See https://github.com/preco21/merge-img/issues/6
-          await new Promise((resolve, reject) => {
-            img.write(filePath, err => {
-              if (err) return reject(err);
-              resolve();
-            });
-          });
-        }
-        await bodyHandle.dispose();
-      } catch (e) {
-        console.log(chalk.red(`Error capturing..`), e);
-        return fs.copy(config.env.backstop + ERROR_SELECTOR_PATH, filePath);
-      }
-    } else {
-      try {
-        await page.screenshot({
-          path: filePath,
-          fullPage: fullPage
-        });
-      } catch (e) {
-        console.log(chalk.red(`Error capturing..`), e);
-        return fs.copy(config.env.backstop + ERROR_SELECTOR_PATH, filePath);
-      }
+    try {
+      await page.screenshot({
+        path: filePath,
+        fullPage: fullPage
+      });
+    } catch (e) {
+      console.log(chalk.red(`Error capturing..`), e);
+      return fs.copy(config.env.backstop + ERROR_SELECTOR_PATH, filePath);
     }
   } else {
     // OTHER-SELECTOR screenshot
@@ -421,8 +362,20 @@ async function captureScreenshot (page, browser, selector, selectorMap, config, 
       if (el) {
         const box = await el.boundingBox();
         if (box) {
+          // Resize the viewport to screenshot elements outside of the viewport
+          if (config.useBoundingBoxViewportForSelectors !== false) {
+            const bodyHandle = await page.$('body');
+            const boundingBox = await bodyHandle.boundingBox();
+
+            await page.setViewport({
+              width: Math.max(viewport.width, Math.ceil(boundingBox.width)),
+              height: Math.max(viewport.height, Math.ceil(boundingBox.height))
+            });
+          }
+
           var type = config.puppeteerOffscreenCaptureFix ? page : el;
           var params = config.puppeteerOffscreenCaptureFix ? { path: path, clip: box } : { path: path };
+
           await type.screenshot(params);
         } else {
           console.log(chalk.yellow(`Element not visible for capturing: ${s}`));
