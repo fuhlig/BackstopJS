@@ -85,17 +85,17 @@ export default class ImageScrubber extends React.Component {
   constructor (props) {
     super(props);
     this.state = {
-      isRefImageMissing: false,
+      dontUseScrubberView: false,
       isLoading: false
     };
 
-    this.handleRefImageLoadingError = this.handleRefImageLoadingError.bind(this);
+    this.handleLoadingError = this.handleLoadingError.bind(this);
     this.loadingDiverge = this.loadingDiverge.bind(this);
   }
 
-  handleRefImageLoadingError () {
+  handleLoadingError () {
     this.setState({
-      isRefImageMissing: true
+      dontUseScrubberView: true
     });
   }
 
@@ -114,6 +114,7 @@ export default class ImageScrubber extends React.Component {
       testImage,
       diffImage,
       divergedImage,
+      showButtons,
       showScrubberTestImage,
       showScrubberRefImage,
       showScrubberDiffImage,
@@ -122,7 +123,6 @@ export default class ImageScrubber extends React.Component {
     } = this.props;
 
     const scrubberTestImageSlug = this.props[testImageType];
-    const hasDiff = diffImage && diffImage.length > 0;
 
     // only show the diverged option if the report comes from web server
     function showDivergedOption () {
@@ -189,13 +189,11 @@ export default class ImageScrubber extends React.Component {
       });
     }
 
-    const dontUseScrubberView = this.state.isRefImageMissing || !hasDiff;
-    const showIsolatedRefImage = !hasDiff && scrubberModalMode === 'SHOW_SCRUBBER_REF_IMAGE';
-    const showIsolatedTestImage = !hasDiff && scrubberModalMode === 'SHOW_SCRUBBER_TEST_IMAGE';
+    const dontUseScrubberView = this.state.dontUseScrubberView || !showButtons;
     return (
       <div>
         <WrapTitle>
-          {hasDiff && (
+          {showButtons && (
             <div>
               <ScrubberViewBtn
                 selected={scrubberModalMode === 'SHOW_SCRUBBER_REF_IMAGE'}
@@ -243,8 +241,7 @@ export default class ImageScrubber extends React.Component {
             id="isolatedRefImage"
             src={refImage}
             style={{
-              margin: 'auto',
-              display: showIsolatedRefImage ? 'block' : 'none'
+              display: 'none'
             }}
           />
           <img
@@ -253,7 +250,7 @@ export default class ImageScrubber extends React.Component {
             src={testImage}
             style={{
               margin: 'auto',
-              display: showIsolatedTestImage ? 'block' : 'none'
+              display: dontUseScrubberView ? 'block' : 'none'
             }}
           />
           <img
@@ -280,7 +277,7 @@ export default class ImageScrubber extends React.Component {
                 id="scrubberRefImage"
                 className="refImage"
                 src={refImage}
-                onError={this.handleRefImageLoadingError}
+                onError={this.handleLoadingError}
               />
               <img
                 id="scrubberTestImage"

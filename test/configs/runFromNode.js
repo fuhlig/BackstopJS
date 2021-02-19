@@ -3,11 +3,10 @@ const backstop = require('../../core/runner');
 
 // Run BackstopJS with docker
 // NOTE: passing either config file name or actual config object is supported.
-backstop('reference', {
-  docker: false,
-  config: 'backstop',
-  filter: undefined,
-  i: false
+backstop('test', {
+  docker: true,
+  config: 'backstop_alt',
+  filter: undefined
 }).then(
   () => console.log('nothing new'),
   () => console.log('changes found')

@@ -11,11 +11,7 @@ module.exports = async (page, scenario) => {
 
   // MUNGE COOKIE DOMAIN
   cookies = cookies.map(cookie => {
-    if (cookie.domain.startsWith('http://') || cookie.domain.startsWith('https://')) {
-      cookie.url = cookie.domain;
-    } else {
-      cookie.url = 'https://' + cookie.domain;
-    }
+    cookie.url = 'https://' + cookie.domain;
     delete cookie.domain;
     return cookie;
   });
